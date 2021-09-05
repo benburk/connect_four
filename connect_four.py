@@ -5,6 +5,79 @@ WIDTH = 7
 HEIGHT = 6
 
 
+def print_bitboard(bitboard: int):
+    """Display the game board."""
+    board = ""
+    for i in range(HEIGHT - 1, -1, -1):
+        for j in range(WIDTH):
+            board += "1" if _get_bit(bitboard, i, j) else "0"
+        board += "\n"
+    print(board)
+
+
+def bottom(width: int, height: int) -> int:
+    return (
+        0 if width == 0 else bottom(width - 1, height) | 1 << (width - 1) * (height + 1)
+    )
+
+
+def _bottom_mask_col(col: int) -> int:
+    return 1 << col * (HEIGHT + 1)
+
+
+def _get_bit(board: int, row: int, col: int) -> int:
+    return (board >> (row + col * WIDTH)) & 1
+
+
+def create_board(board, player):
+    bitboard = 0
+    for row in range(HEIGHT):
+        for col in range(WIDTH):
+            if board[HEIGHT - row - 1][WIDTH - col - 1] == player:
+                bitboard |= 1 << (row + col * WIDTH)
+    return bitboard
+
+
+BOTTOM_MASK = bottom(WIDTH, HEIGHT)
+BOARD_MASK = BOTTOM_MASK * ((1 << HEIGHT) - 1)
+
+
+def winning_moves(position: int, mask: int) -> int:
+    """
+    Basically, find the squares that complete four in a row.
+    Return a bitmask of the possible winning positions for the opponent
+
+    """
+    # vertical
+    r = (position << 1) & (position << 2) & (position << 3)
+
+    # horizontal
+    p = (position << (HEIGHT + 1)) & (position << 2 * (HEIGHT + 1))
+    r |= p & (position << 3 * (HEIGHT + 1))
+    r |= p & (position >> (HEIGHT + 1))
+    p = (position >> (HEIGHT + 1)) & (position >> 2 * (HEIGHT + 1))
+    r |= p & (position << (HEIGHT + 1))
+    r |= p & (position >> 3 * (HEIGHT + 1))
+
+    # diagonal 1
+    p = (position << HEIGHT) & (position << 2 * HEIGHT)
+    r |= p & (position << 3 * HEIGHT)
+    r |= p & (position >> HEIGHT)
+    p = (position >> HEIGHT) & (position >> 2 * HEIGHT)
+    r |= p & (position << HEIGHT)
+    r |= p & (position >> 3 * HEIGHT)
+
+    # diagonal 2
+    p = (position << (HEIGHT + 2)) & (position << 2 * (HEIGHT + 2))
+    r |= p & (position << 3 * (HEIGHT + 2))
+    r |= p & (position >> (HEIGHT + 2))
+    p = (position >> (HEIGHT + 2)) & (position >> 2 * (HEIGHT + 2))
+    r |= p & (position << (HEIGHT + 2))
+    r |= p & (position >> 3 * (HEIGHT + 2))
+
+    return r & (BOARD_MASK ^ mask)
+
+
 def find_four(board: Sequence[Sequence[int]]) -> bool:
     for row in range(HEIGHT):
         for col in range(WIDTH):
@@ -69,6 +142,10 @@ class Board:
             board.play(int(move) - 1)
         return board
 
+    def test(self):
+        bitboard = create_board(self.board, self.current_player)
+        print_bitboard(bitboard)
+
     def play(self, col: int):
         for row in range(HEIGHT - 1, -1, -1):
             if not self.board[row][col]:
@@ -87,7 +164,17 @@ class Board:
     def score(self):
         if find_four(self.board):
             return -100
-        return 0
+
+        me = create_board(self.board, self.current_player)
+        other = create_board(self.board, -self.current_player)
+        mask = me | other
+        
+        count1 = winning_moves(me, mask)
+        count1 = bin(count1).count('1')
+        count2 = winning_moves(other, mask)
+        count2 = bin(count2).count('1')
+        return count1 - count2
+
 
     def children(self):
         for i in range(WIDTH):
